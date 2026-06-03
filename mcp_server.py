@@ -123,7 +123,13 @@ def tool_download(url, audio_only=False, proxy=None, output_dir=None):
             "files": [{"name": f["name"], "path": f.get("path", ""), "size": f.get("size", 0)} for f in files]
         }
     else:
-        return {"status": "error", "message": data.get("progress", "下载失败")}
+        response = {"status": "error", "message": data.get("progress", "下载失败")}
+        # 透传 error_code 和 hints（如果后端返回了）
+        if data.get("error_code"):
+            response["error_code"] = data["error_code"]
+        if data.get("hints"):
+            response["hints"] = data["hints"]
+        return response
 
 
 def tool_transcribe(video_path):
@@ -206,13 +212,13 @@ def tool_status():
 TOOLS = [
     {
         "name": "vgrab_download",
-        "description": "下载视频或音频。支持 YouTube、B站、抖音、Twitter/X 等 1000+ 平台。返回下载文件的路径。",
+        "description": "下载视频或音频。支持 YouTube、B站、抖音、Twitter/X 等 1000+ 平台。返回下载文件的路径。失败时返回 error_code 和 hints 字段，可指导恢复操作。常见 error_code: proxy_unreachable / geo_blocked / private_video / video_not_found / network_timeout / format_unavailable / unknown_extractor。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "url": {"type": "string", "description": "视频链接 (http/https)"},
                 "audio_only": {"type": "boolean", "description": "仅下载音频 (MP3)", "default": False},
-                "proxy": {"type": "string", "description": "代理地址，如 socks5://127.0.0.1:7890"},
+                "proxy": {"type": "string", "description": "代理地址，如 socks5://127.0.0.1:7890。海外站点(YouTube/Twitter)需要代理，国内站点(B站/抖音)不需要"},
                 "output_dir": {"type": "string", "description": "指定输出目录"},
             },
             "required": ["url"],

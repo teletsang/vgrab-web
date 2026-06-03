@@ -75,7 +75,13 @@ def _do_download(task_id: str, url: str, options: dict):
     # 代理预检：快速判断代理是否可达
     if proxy and not _check_proxy(proxy):
         tasks.update(task_id, status="error",
-                     progress=f"代理不可达: {proxy} (connection refused)")
+                     progress=f"代理不可达: {proxy} (connection refused)",
+                     error_code="proxy_unreachable",
+                     hints=[
+                         "检查代理 App 是否启动（Clash/Surge/V2Ray 等菜单栏图标）",
+                         f"确认代理监听端口与参数一致: {proxy}",
+                         "或去掉 proxy 参数，直连下载（B站/抖音/小红书等国内源不需要代理）",
+                     ])
         logger.warning(f"代理预检失败: {task_id}, proxy={proxy}")
         return
 
@@ -139,6 +145,9 @@ def _do_download(task_id: str, url: str, options: dict):
             # 截断过长的错误信息
             error_detail = error_detail[:300]
 
+            # 识别错误类型，生成可执行的恢复建议
+            error_code, hints = _classify_error(error_detail, proxy)
+
             # 尝试 ffmpeg 流录制
             stream_patterns = ['.m3u8', '.mpd', 'rtmp://', 'rtsp://']
             if any(p in url.lower() for p in stream_patterns):
@@ -146,8 +155,10 @@ def _do_download(task_id: str, url: str, options: dict):
                 _try_ffmpeg(task_id, url, output_dir, proxy)
             else:
                 tasks.update(task_id, status="error",
-                             progress=f"下载失败 (exit {proc.returncode}): {error_detail}")
-                logger.warning(f"下载失败: {task_id}, exit={proc.returncode}, detail={error_detail}")
+                             progress=f"下载失败 (exit {proc.returncode}): {error_detail}",
+                             error_code=error_code,
+                             hints=hints)
+                logger.warning(f"下载失败: {task_id}, code={error_code}, detail={error_detail}")
 
     except Exception as e:
         tasks.update(task_id, status="error", progress=f"异常: {str(e)[:200]}")
@@ -199,3 +210,58 @@ def _check_proxy(proxy: str) -> bool:
         return True
     except (ConnectionRefusedError, OSError, TimeoutError):
         return False
+
+
+def _classify_error(error_detail: str, proxy: Optional[str] = None) -> tuple:
+    """根据错误内容分类，返回 (error_code, hints)"""
+    err = error_detail.lower()
+
+    if "connection refused" in err or "proxy" in err and "refused" in err:
+        return "proxy_unreachable", [
+            "检查代理 App 是否启动（Clash/Surge/V2Ray）",
+            f"确认代理端口正确: {proxy or '未指定'}",
+            "或去掉 proxy 参数直连下载",
+        ]
+    elif "not available" in err and "country" in err:
+        return "geo_blocked", [
+            "该视频有地区限制",
+            "尝试切换代理节点到目标国家/地区",
+            "或使用其他 IP 池",
+        ]
+    elif "private video" in err or "login required" in err or "sign in" in err:
+        return "private_video", [
+            "该视频需要登录才能观看",
+            "确保 Chrome 已登录该平台账号（yt-dlp 会读取 Chrome cookie）",
+            "或手动提供 cookie 文件",
+        ]
+    elif "video unavailable" in err or "not exist" in err or "404" in err:
+        return "video_not_found", [
+            "视频不存在或已被删除",
+            "检查 URL 是否正确",
+            "该视频可能已被原作者下架",
+        ]
+    elif "timed out" in err or "timeout" in err:
+        return "network_timeout", [
+            "网络连接超时",
+            "检查网络连接是否正常",
+            "如果是 YouTube 等海外站点，确认代理可用",
+            "或稍后重试",
+        ]
+    elif "requested format" in err or "format" in err and "not available" in err:
+        return "format_unavailable", [
+            "请求的视频格式不可用",
+            "尝试去掉 format 参数使用默认格式 (bestvideo+bestaudio)",
+            "或使用 --audio 仅下载音频",
+        ]
+    elif "unsupported url" in err or "no suitable" in err:
+        return "unknown_extractor", [
+            "该网站可能不被 yt-dlp 支持",
+            "尝试用浏览器开发者工具抓取直接视频流 URL",
+            "如果是 m3u8/rtmp 流，vgrab 会自动尝试 ffmpeg 录制",
+        ]
+    else:
+        return "download_failed", [
+            "下载失败，请查看详细错误信息",
+            "尝试重试，或换一个视频格式",
+            "如持续失败，可能是 yt-dlp 版本过旧，运行: brew upgrade yt-dlp",
+        ]
