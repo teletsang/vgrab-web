@@ -1,0 +1,11 @@
+# vgrab-web 依赖 (pinned versions)
+flask==3.1.*
+yt-dlp>=2025.0
+waitress>=2.0
+
+# macOS native UI (可选)
+pywebview>=4.0;sys_platform=="darwin"
+
+# 系统级依赖（需通过 brew install）:
+#   ffmpeg
+#   yt-dlp (也可通过 pip)
