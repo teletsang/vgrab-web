@@ -133,18 +133,19 @@ echo -e "  ${GREEN}✓${NC} Python 包就绪"
 # --- [4/5] 部署代码 ---
 echo -e "${BLUE}[4/5]${NC} 部署项目代码..."
 
-if [[ "$SCRIPT_DIR" != "$INSTALL_DIR" ]]; then
-    if [[ -d "$INSTALL_DIR" ]]; then
-        echo "  更新 $INSTALL_DIR..."
-        rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='_logs' --exclude='.git' \
-            "$SCRIPT_DIR/" "$INSTALL_DIR/"
-    else
-        echo "  复制到 $INSTALL_DIR..."
-        rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='_logs' --exclude='.git' \
-            "$SCRIPT_DIR/" "$INSTALL_DIR/"
-    fi
+REPO_URL="https://github.com/teletsang/vgrab-web.git"
+
+if [[ -d "$INSTALL_DIR/.git" ]]; then
+    echo "  更新代码 (git pull)..."
+    cd "$INSTALL_DIR" && git pull --rebase --quiet 2>/dev/null || true
+elif [[ -d "$INSTALL_DIR" ]]; then
+    # 旧版无 .git，迁移
+    echo "  升级为 git 仓库..."
+    mv "$INSTALL_DIR" "$INSTALL_DIR.old"
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
 else
-    echo "  已在目标目录"
+    echo "  下载 vgrab-web..."
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
 fi
 echo -e "  ${GREEN}✓${NC} 代码就绪"
 

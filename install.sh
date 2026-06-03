@@ -26,16 +26,20 @@ python3 -m pip install --quiet flask pywebview yt-dlp 2>/dev/null || true
 
 # --- [3] 拉代码 ---
 INSTALL_DIR="$HOME/vgrab-web"
+REPO_URL="https://github.com/teletsang/vgrab-web.git"
+
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     echo "📂 更新代码..."
     cd "$INSTALL_DIR" && git pull --rebase 2>/dev/null || true
 elif [[ -d "$INSTALL_DIR" ]]; then
-    echo "📂 目录已存在，跳过克隆"
+    # 旧版 install 没有 .git，迁移为 git 仓库
+    echo "📂 升级为 git 仓库（旧安装迁移）..."
+    mv "$INSTALL_DIR" "$INSTALL_DIR.old"
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+    echo "  旧版备份在 ~/vgrab-web.old（可删除）"
 else
     echo "📂 下载 vgrab-web..."
-    git clone --depth 1 https://github.com/teletsang/openclaw-knowledge-vault.git /tmp/_vgrab_clone
-    mv /tmp/_vgrab_clone/scripts/vgrab-web "$INSTALL_DIR"
-    rm -rf /tmp/_vgrab_clone
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
 fi
 
 # --- [4] 打包 macOS App ---
